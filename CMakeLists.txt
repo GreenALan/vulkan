@@ -28,5 +28,8 @@ file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 file(GLOB HPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
 
 MESSAGE(${CPP_FILES})
+
+add_subdirectory(base)
+
 # Build project, give it a name and includes list of file to be compiled
 add_executable(${NAME} ${CPP_FILES} ${HPP_FILES})
