@@ -17,6 +17,7 @@
 #include "VulkanTools.h"
 #include "VulkanSwapChain.h"
 #include "VulkanUIOverlay.h"
+#include "camera.hpp"
 
 class VulkanBase
 {
@@ -71,6 +72,9 @@ public:
 		/** @brief Enable UI overlay */
 		bool overlay = true;
 	} settings;
+
+	Camera camera;
+	glm::vec2 mousePos;
 
 	std::string title = "Vulkan Example";
 	std::string name = "vulkanExample";
