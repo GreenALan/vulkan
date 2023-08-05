@@ -174,16 +174,145 @@ public:
 		memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
 
 		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &stagingBuffers.vertices.memory));
-
         VK_CHECK_RESULT(vkMapMemory(device, stagingBuffers.vertices.memory, 0, memAlloc.allocationSize, 0, &data));
 		memcpy(data, vertexBuffer.data(), vertexBufferSize);
 		vkUnmapMemory(device, stagingBuffers.vertices.memory);
+        VK_CHECK_RESULT(vkBindBufferMemory(device, stagingBuffers.vertices.buffer, stagingBuffers.vertices.memory, 0));
+
+        vertexBufferInfoCI.usage = VK_BUFFER_USAGET_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfoCI, nullptr, &vertices.buffer));
+        vkGetBufferMemoryRequirements(device, &memAlloc, nullptr, &vertices.memory);
+        memAlloc.allocationSize = memReqs.size;
+        memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)；
+        VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &vertices.memory));
+        VK_CHECK_RESULT(vkBindBufferMemory(device, vertices.buffer, vertices.memory, 0));
+
+        // Index buffer
+		VkBufferCreateInfo indexbufferCI{};
+		indexbufferCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+		indexbufferCI.size = indexBufferSize;
+		indexbufferCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+		// Copy index data to a buffer visible to the host (staging buffer)
+		VK_CHECK_RESULT(vkCreateBuffer(device, &indexbufferCI, nullptr, &stagingBuffers.indices.buffer));
+		vkGetBufferMemoryRequirements(device, stagingBuffers.indices.buffer, &memReqs);
+		memAlloc.allocationSize = memReqs.size;
+		memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &stagingBuffers.indices.memory));
+		VK_CHECK_RESULT(vkMapMemory(device, stagingBuffers.indices.memory, 0, indexBufferSize, 0, &data));
+		memcpy(data, indexBuffer.data(), indexBufferSize);
+		vkUnmapMemory(device, stagingBuffers.indices.memory);
+		VK_CHECK_RESULT(vkBindBufferMemory(device, stagingBuffers.indices.buffer, stagingBuffers.indices.memory, 0));
+
+        	// Create destination buffer with device only visibility
+		indexbufferCI.usage = VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+		VK_CHECK_RESULT(vkCreateBuffer(device, &indexbufferCI, nullptr, &indices.buffer));
+		vkGetBufferMemoryRequirements(device, indices.buffer, &memReqs);
+		memAlloc.allocationSize = memReqs.size;
+		memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
+		VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &indices.memory));
+		VK_CHECK_RESULT(vkBindBufferMemory(device, indices.buffer, indices.memory, 0));
+
+        VkCommandBuffer copyCmd;
+
+        VkCommandBufferAllocateInfo cmdBufAllocateInfo{};
+        cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+        cmdBufAllocateInfo.commandPool = commandPool;
+        cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+        cmdBufAllocateInfo.commandBUfferCount = 1;
+        VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
+
+        VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::VkCommandBufferBeginInfo()；
+        VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
+
+        VkBufferCopy copyRegion{};
+
+        copyRegion.size = vertexBufferSize;
+        vkCmdCopyBuufer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
+
+        copyRegion.size = indexBufferSize;
+        vkCmdCopyBuufer(copyCmd, stagingBuffers.indices.buffer, indices.buffer, 1, &copyRegion);
+        VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
+
+        VkSubmitInfo submitInfo{};
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.commandBufferCount = 1;
+        submitInfo.pCommandBuffers = &copyCmd;
+
+        VkFenceCreateInfo fenceCI{};
+        fenceCI.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+        fenceCI.flags = 0;
+        VkFence fence;
+        VK_CHECK_RESULT(vkCreateFence(device, &fenceCI, nullptr, &fence));
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
+        VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
+
+        vkDestoryFence(device, fence, nullptr);
+        vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
+
+        vkDestroyBuffer(device, stagingBuffers.vertices.buffer, nullptr);
+        vkFreeMemory(device, stagingBuffers.vertices.memory, nullptr);
+        vkDestroyBuffer(device, stagingBuffers.indices.buffer, nullptr);
+        vkFreeCommandBuffers(device, stagingBuffers.indices.memory, nullptr);
+        
+    }
+
+    void createUniformBUffers()
+    {
+        VkMemoryRequirements memReqs;
+
+        VkBufferCreateInfo bufferInfo{};
+        VkMemoryAllcoateInfo allocInfo{};
+        allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+        allocInfo.pNext = nullptr;
+        allocInfo.allocationSize = 0;
+        allocInfo.memoryTypeIndex = 0;
+
+        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+        bufferInfo.size = sizeof(ShaderData);
+        buffer.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+        for (uint32_t i = 0; i < MAX_CONCURRENT_FRAMES; i++) {
+            VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &uniformBuffer[i].buffer));
+            vkGetBufferMemoryRequirements(device, uniformBuffer[i].buffer, &memReqs);
+            allocInfo.allocationSize = memReqs.size;
+            allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+            VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &(uniformBuffer[i].memory)));
+            VK_CHECK_RESULT(vkBindBufferMemory(device, uniformBuffer[i].buffer, uniformBuffer[i].memory));
+            VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer[i].memory, 0 , sizeof(ShaderData), 0, (void**)&UniformBuffers[i].mapped));
+
+        }
+    }
+
+    void createDescriptorSetLayout()
+    {
+        VkdescriptSetLayoutBinding layoutBinding{};
+        layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+        layoutBinding.descriptorCount = 1;
+        layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+        layoutBinding.pImmutableSamples = nullptr;
+
+        VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
+        descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+        descriptorLayoutCI.pNext = nullptr;
+        descriptorLayoutCI.bindingCount = 1;
+        descriptorLayoutCI.pBindings = &layoutBinding;
+        VK_CHECK_RESULT(vkCreateDescriptSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout));
+
+        VkPipelineLayoutCreateInfo pipelineLayoutCI{};
+        pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPLELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutCI.pNext = nullptr;
+        pipelineLayoutCI.setLayoutCount = 1;
+        pipelineLayoutCI.pSetLayouts = &descriptorSetLayout;
+        
+        VK_CHECK_RESULT(vkCreatePipelineLayout(device, &pipelineLayoutCI, nullptr, &pipelineLayout));
     }
 
     void prepare()
     {
         VulkanBase::prepare();
         createSynchronizationPrimitives();
+        createCommandBuffers();
+        createVertexBuffer();
     }
 
 
