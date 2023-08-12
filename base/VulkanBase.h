@@ -45,6 +45,12 @@ public:
 	/** @brief Prepares all Vulkan resources and functions required to run the sample */
 	virtual void prepare();
 
+	virtual void setupDepthStencil();
+
+	virtual void setupRenderPass();
+
+	virtual void setupFrameBuffer();
+
 		/** @brief Loads a SPIR-V shader file for the given shader stage */
 	VkPipelineShaderStageCreateInfo loadShader(std::string fileName, VkShaderStageFlagBits stage);
 
@@ -60,6 +66,8 @@ public:
 		VkDeviceMemory mem;
 		VkImageView view;
 	} depthStencil;
+
+	vks::VulkanDevice* vulkanDevice;
 
 	/** @brief Example settings that can be changed e.g. by command line arguments */
 	struct Settings {
@@ -80,11 +88,15 @@ public:
 	std::string name = "vulkanExample";
 	uint32_t apiVersion = VK_API_VERSION_1_0;
 
+#if defined(_WIN32)
+	HWND window;
+	HINSTANCE windowInstance;
+#endif
+
 protected:
 	// Returns the path to the root of the glsl or hlsl shader directory.
 	std::string getShadersPath() const;
 
-protected:
 	// Vulkan instance, stores all per-application states
 	VkInstance instance;
 	std::vector<std::string> supportedInstanceExtensions;
@@ -112,7 +124,7 @@ protected:
 
 	VkCommandPool cmdPool;
 
-	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STATGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	VkPipelineStageFlags submitPipelineStages = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
 
 	VkSubmitInfo submitInfo;
 
@@ -140,6 +152,10 @@ protected:
 		VkSemaphore renderComplete;
 	} semaphores;
 
+	std::vector<VkFence> waitFences;
+	bool requiresStencil{ false };
+
+
 private:
 	std::string getWindowTitle();
 	uint32_t destWidth;
@@ -153,6 +169,8 @@ private:
 	void createSynchronizationPrimitives();
 	void createCommandBuffers();
 	void destroyCommandBuffers();
+	void createPipelineCache();
+
 	std::string shaderDir = "glsl";
 
 private:
