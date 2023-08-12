@@ -1,8 +1,11 @@
 #include <iostream>
+#include <stdio.h>
+#include <stdlib.h>
+#include <array>
 #include <vulkan/vulkan.h>
 #include "base/VulkanBase.h"
 #include <glm/glm.hpp>
-#include <glm/gtc/matric_transform.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #define ENABLE_VALIDATION false 
 
@@ -41,7 +44,7 @@ public:
 		uint8_t* mapped{ nullptr };
 	};
 
-    std::array<UniformBuffer, MAX_CONCURRENT_FRAMES> UniformBuffers;
+    std::array<UniformBuffer, MAX_CONCURRENT_FRAMES> uniformBuffers;
 
     struct ShaderData {
 		glm::mat4 projectionMatrix;
@@ -60,11 +63,11 @@ public:
 
     VkCommandPool commandPool;
     std::array<VkCommandBuffer, MAX_CONCURRENT_FRAMES> commandBuffers;
-    std::array<VkCommandBuffer, MAX_CONCURRENT_FRAMES> waitFences;
+    std::array<VkFence, MAX_CONCURRENT_FRAMES> waitFences;
 
     uint32_t currentFrame = 0;
 
-    VulkanExample() : VulkanExampleBase(ENABLE_VALIDATION)
+    VulkanExample() : VulkanBase(ENABLE_VALIDATION)
     {
         title = "Triangle";
         settings.overlay = false;
@@ -89,11 +92,11 @@ public:
 
         for (uint32_t i = 0; i < MAX_CONCURRENT_FRAMES; i++)
         {
-            vkDestoryFence(device, waitFences[i], nullptr);
-            vkDestorSemaphore(device, presentCompleteSemaphores[i], nullptr);
-            vkDestorSemaphore(device, renderCompleteSemaphores[i], nullptr);
-            vkDestroyBuffer(device, UniformBuffers[i].buffer, nullptr);
-            vkFreeMemory(device, UniformBuffers[i].memory, nullptr);
+            vkDestroyFence(device, waitFences[i], nullptr);
+            vkDestroySemaphore(device, presentCompleteSemaphores[i], nullptr);
+            vkDestroySemaphore(device, renderCompleteSemaphores[i], nullptr);
+            vkDestroyBuffer(device, uniformBuffers[i].buffer, nullptr);
+            vkFreeMemory(device, uniformBuffers[i].memory, nullptr);
         }
 
     }
@@ -134,33 +137,51 @@ public:
 		VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, commandBuffers.data()));
 	}
 
-    void createVertexBuffer()
+    uint32_t  getMemoryTypeIndex(uint32_t typeBits, VkMemoryPropertyFlags properties)
     {
-        std::vector<Vertex> vertexBuffer {
-            { {  1.0f,  1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
-			{ { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
-			{ {  0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+        // Iterate over all memory types available for the device used in this example
+        for (uint32_t i = 0; i < deviceMemoryProperties.memoryTypeCount; i++)
+        {
+            if ((typeBits & 1) == 1)
+            {
+                if ((deviceMemoryProperties.memoryTypes[i].propertyFlags & properties) == properties)
+                {
+                    return i;
+                }
+            }
+            typeBits >>= 1;
         }
 
-        uint32_t vertexBufferSize = static_cast<uint32_t>(vertexBuffer.size()) * sizeof(Vertex);
+        throw "Could not find a suitable memory type!";
+    }
+
+    void createVertexBuffer()
+    {
+        std::vector<Vertex> vertexBuffer{
+            { {  1.0f,  1.0f, 0.0f }, { 1.0f, 0.0f, 0.0f } },
+            { { -1.0f,  1.0f, 0.0f }, { 0.0f, 1.0f, 0.0f } },
+            { {  0.0f, -1.0f, 0.0f }, { 0.0f, 0.0f, 1.0f } }
+        };
+
+        uint32_t vertexBufferSize = static_cast<uint32_t>(vertexBuffer.size() * sizeof(Vertex));
 
         std::vector<uint32_t> indexBuffer{ 0, 1, 2 };
 		indices.count = static_cast<uint32_t>(indexBuffer.size());
 		uint32_t indexBufferSize = indices.count * sizeof(uint32_t);
 
-        VkMemoryAllcoateInfo memAlloc {};
+        VkMemoryAllocateInfo memAlloc {};
         memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         VkMemoryRequirements memReqs;
 
         struct StagingBuffer {
             VkDeviceMemory memory;
             VkBuffer buffer;
-        }
+        };
 
         struct {
             StagingBuffer vertices;
             StagingBuffer indices;
-        } StagingBuffers;
+        } stagingBuffers;
 
         void* data;
 
@@ -179,9 +200,9 @@ public:
 		vkUnmapMemory(device, stagingBuffers.vertices.memory);
         VK_CHECK_RESULT(vkBindBufferMemory(device, stagingBuffers.vertices.buffer, stagingBuffers.vertices.memory, 0));
 
-        vertexBufferInfoCI.usage = VK_BUFFER_USAGET_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        vertexBufferInfoCI.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
         VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfoCI, nullptr, &vertices.buffer));
-        vkGetBufferMemoryRequirements(device, &memAlloc, nullptr, &vertices.memory);
+        vkGetBufferMemoryRequirements(device, vertices.buffer, &memReqs);
         memAlloc.allocationSize = memReqs.size;
         memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)；
         VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &vertices.memory));
@@ -218,19 +239,19 @@ public:
         cmdBufAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
         cmdBufAllocateInfo.commandPool = commandPool;
         cmdBufAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-        cmdBufAllocateInfo.commandBUfferCount = 1;
+        cmdBufAllocateInfo.commandBufferCount = 1;
         VK_CHECK_RESULT(vkAllocateCommandBuffers(device, &cmdBufAllocateInfo, &copyCmd));
 
-        VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::VkCommandBufferBeginInfo()；
+        VkCommandBufferBeginInfo cmdBufInfo = vks::initializers::commandBufferBeginInfo();
         VK_CHECK_RESULT(vkBeginCommandBuffer(copyCmd, &cmdBufInfo));
 
         VkBufferCopy copyRegion{};
 
         copyRegion.size = vertexBufferSize;
-        vkCmdCopyBuufer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
+        vkCmdCopyBuffer(copyCmd, stagingBuffers.vertices.buffer, vertices.buffer, 1, &copyRegion);
 
         copyRegion.size = indexBufferSize;
-        vkCmdCopyBuufer(copyCmd, stagingBuffers.indices.buffer, indices.buffer, 1, &copyRegion);
+        vkCmdCopyBuffer(copyCmd, stagingBuffers.indices.buffer, indices.buffer, 1, &copyRegion);
         VK_CHECK_RESULT(vkEndCommandBuffer(copyCmd));
 
         VkSubmitInfo submitInfo{};
@@ -246,22 +267,22 @@ public:
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, fence));
         VK_CHECK_RESULT(vkWaitForFences(device, 1, &fence, VK_TRUE, DEFAULT_FENCE_TIMEOUT));
 
-        vkDestoryFence(device, fence, nullptr);
+        vkDestroyFence(device, fence, nullptr);
         vkFreeCommandBuffers(device, commandPool, 1, &copyCmd);
 
         vkDestroyBuffer(device, stagingBuffers.vertices.buffer, nullptr);
         vkFreeMemory(device, stagingBuffers.vertices.memory, nullptr);
         vkDestroyBuffer(device, stagingBuffers.indices.buffer, nullptr);
-        vkFreeCommandBuffers(device, stagingBuffers.indices.memory, nullptr);
+        vkFreeMemory(device, stagingBuffers.indices.memory,  nullptr);
         
     }
 
-    void createUniformBUffers()
+    void createUniformBuffers()
     {
         VkMemoryRequirements memReqs;
 
         VkBufferCreateInfo bufferInfo{};
-        VkMemoryAllcoateInfo allocInfo{};
+        VkMemoryAllocateInfo allocInfo{};
         allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
         allocInfo.pNext = nullptr;
         allocInfo.allocationSize = 0;
@@ -269,11 +290,11 @@ public:
 
         bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
         bufferInfo.size = sizeof(ShaderData);
-        buffer.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+        bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
         for (uint32_t i = 0; i < MAX_CONCURRENT_FRAMES; i++) {
             VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &uniformBuffer[i].buffer));
-            vkGetBufferMemoryRequirements(device, uniformBuffer[i].buffer, &memReqs);
+            vkGetBufferMemoryRequirements(device, uniformBuffers[i].buffer, &memReqs);
             allocInfo.allocationSize = memReqs.size;
             allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
             VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &(uniformBuffer[i].memory)));
@@ -285,21 +306,21 @@ public:
 
     void createDescriptorSetLayout()
     {
-        VkdescriptSetLayoutBinding layoutBinding{};
+        VkDescriptorSetLayoutBinding layoutBinding{};
         layoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         layoutBinding.descriptorCount = 1;
         layoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-        layoutBinding.pImmutableSamples = nullptr;
+        layoutBinding.pImmutableSamplers = nullptr;
 
         VkDescriptorSetLayoutCreateInfo descriptorLayoutCI{};
         descriptorLayoutCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         descriptorLayoutCI.pNext = nullptr;
         descriptorLayoutCI.bindingCount = 1;
         descriptorLayoutCI.pBindings = &layoutBinding;
-        VK_CHECK_RESULT(vkCreateDescriptSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout));
+        VK_CHECK_RESULT(vkCreateDescriptorSetLayout(device, &descriptorLayoutCI, nullptr, &descriptorSetLayout));
 
         VkPipelineLayoutCreateInfo pipelineLayoutCI{};
-        pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPLELINE_LAYOUT_CREATE_INFO;
+        pipelineLayoutCI.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
         pipelineLayoutCI.pNext = nullptr;
         pipelineLayoutCI.setLayoutCount = 1;
         pipelineLayoutCI.pSetLayouts = &descriptorSetLayout;
@@ -311,7 +332,7 @@ public:
     {
         VkDescriptorPoolSize descriptorTypeCounts[1];
         descriptorTypeCounts[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorTypeCounts[0].descriptorCount = MAX_CONCURRENT_FRAMES；
+        descriptorTypeCounts[0].descriptorCount = MAX_CONCURRENT_FRAMES;
 
 		VkDescriptorPoolCreateInfo descriptorPoolCI{};
 		descriptorPoolCI.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -328,7 +349,7 @@ public:
     {
         for (uint32_t i = 0; i < MAX_CONCURRENT_FRAMES; i++)
         {
-            VkDescriptorSetAllocateInfo allocatedInfo{};
+            VkDescriptorSetAllocateInfo allocInfo{};
             allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
             allocInfo.descriptorPool = descriptorPool;
             allocInfo.descriptorSetCount = 1;
@@ -408,21 +429,21 @@ public:
         VkGraphicsPipelineCreateInfo pipelineCI{};
         pipelineCI.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
         pipelineCI.layout = pipelineLayout;
-        pipeline.renderPass = renderPass;
+        pipelineCI.renderPass = renderPass;
 
         VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCI{};
-        inputAssemblyStateCI.sType = VK_STRUCTURE_TYPE_PIPLELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+        inputAssemblyStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
         inputAssemblyStateCI.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
 
         VkPipelineRasterizationStateCreateInfo rasterizationStateCI{};
-        rasterizationStateCI.sType = VK_STRUCTURE_TYPE_PIPE_RASTERIZATION_STATE_CREATE_INFO;
+        rasterizationStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
         rasterizationStateCI.polygonMode = VK_POLYGON_MODE_LINE;
         rasterizationStateCI.cullMode = VK_CULL_MODE_NONE;
         rasterizationStateCI.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
         rasterizationStateCI.depthClampEnable = VK_FALSE;
         rasterizationStateCI.rasterizerDiscardEnable = VK_FALSE;
         rasterizationStateCI.depthBiasEnable = VK_FALSE;
-        rasterizationStateCI.lineWIdth = 1.0f;
+        rasterizationStateCI.lineWidth = 1.0f;
 
         VkPipelineColorBlendAttachmentState blendAttachmentState{};
         blendAttachmentState.colorWriteMask = 0Xf;
@@ -433,8 +454,8 @@ public:
         colorBlendStateCI.attachmentCount = 1;
         colorBlendStateCI.pAttachments = &blendAttachmentState;
 
-        VkPipelineViewportStateCrateInfo viewportStateCI{};
-        viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPE_VIEWPORT_STATE_CREATE_INFO;
+        VkPipelineViewportStateCreateInfo viewportStateCI{};
+        viewportStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
         viewportStateCI.viewportCount = 1;
         viewportStateCI.scissorCount = 1;
 
@@ -443,7 +464,7 @@ public:
         dynamicStateEnable.push_back(VK_DYNAMIC_STATE_SCISSOR);
         VkPipelineDynamicStateCreateInfo dynamicStateCI{};
         dynamicStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-        dynamicStateCI.pDynamicStates = dynamicStateEnables.data();
+        dynamicStateCI.pDynamicStates = dynamicStateEnable.data();
         dynamicStateCI.dynamicStateCount = static_cast<uint32_t>(dynamicStateEnable.size());
 
         VkPipelineDepthStencilStateCreateInfo depthStencilStateCI{};
@@ -451,7 +472,7 @@ public:
         depthStencilStateCI.depthTestEnable = VK_TRUE;
         depthStencilStateCI.depthWriteEnable = VK_TRUE;
         depthStencilStateCI.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-        depthStencilStateCI.depthBoundTestEnable = VK_FALSE;
+        depthStencilStateCI.depthBoundsTestEnable = VK_FALSE;
         depthStencilStateCI.back.failOp = VK_STENCIL_OP_KEEP;
         depthStencilStateCI.back.passOp = VK_STENCIL_OP_KEEP;
         depthStencilStateCI.back.compareOp = VK_COMPARE_OP_ALWAYS;
@@ -483,23 +504,23 @@ public:
         VkPipelineVertexInputStateCreateInfo vertexInputStateCI{};
         vertexInputStateCI.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
         vertexInputStateCI.vertexBindingDescriptionCount = 1;
-        vertexInputStateCI.pVertexBindingDescriptionCount = &vertexInputBinding;
+        vertexInputStateCI.pVertexBindingDescriptions = &vertexInputBinding;
         vertexInputStateCI.vertexAttributeDescriptionCount = 2;
         vertexInputStateCI.pVertexAttributeDescriptions = vertexInputAttributs.data();
 
-        std::array<VkPipelineShaderStageCreateInfo, 2> shderStages{};
+        std::array<VkPipelineShaderStageCreateInfo, 2> shaderStages{};
 
         shaderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
         shaderStages[0].stage = VK_SHADER_STAGE_VERTEX_BIT;
-        shaderStages[0].module = loadSPIRVShader(getShaderPath() + "triangle/triangle.vert.spv");
+        shaderStages[0].module = loadSPIRVShader(getShadersPath() + "triangle/triangle.vert.spv");
         shaderStages[0].pName = "main";
         assert(shaderStages[0].module != VK_NULL_HANDLE);
 
-        aderStages[0].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-        shaderStages[0].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-        shaderStages[0].module = loadSPIRVShader(getShaderPath() + "triangle/triangle.frag.spv");
-        shaderStages[0].pName = "main";
-        assert(shaderStages[0].module != VK_NULL_HANDLE);
+        shaderStages[1].sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+        shaderStages[1].stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+        shaderStages[1].module = loadSPIRVShader(getShadersPath() + "triangle/triangle.frag.spv");
+        shaderStages[1].pName = "main";
+        assert(shaderStages[1].module != VK_NULL_HANDLE);
 
         pipelineCI.stageCount = static_cast<uint32_t>(shaderStages.size());
         pipelineCI.pStages = shaderStages.data();
@@ -515,8 +536,8 @@ public:
 
         VK_CHECK_RESULT(vkCreateGraphicsPipelines(device, pipelineCache, 1, &pipelineCI, nullptr, &pipeline));
 
-        vkDestoryShaderModule(device, shaderStage[0].module, nullptr); 
-        vkDestoryShaderModule(device, shaderStage[1].module, nullptr); 
+        vkDestroyShaderModule(device, shaderStages[0].module, nullptr); 
+        vkDestroyShaderModule(device, shaderStages[1].module, nullptr); 
 
 
     }
@@ -532,7 +553,7 @@ public:
         createDescriptorPool();
 		createDescriptorSets();
         createPipelines();
-        prepare = true;
+        prepared = true;
 
     }
 
@@ -548,7 +569,7 @@ public:
         VkResult result = vkAcquireNextImageKHR(device, swapChain.swapChain, UINT64_MAX, presentCompleteSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-            windowResize();
+           /* windowResize();*/
             return;
         }  
         else if (result != VK_SUCCESS && (result != VK_SUBOPTIMAL_KHR)) {
@@ -560,7 +581,7 @@ public:
         shaderData.viewMatrix = camera.matrices.view;
         shaderData.modelMatrix = glm::mat4(1.0f);
 
-        memcpy(uniformBuffer[currentBuffer]mapped, &shaderData, sizeof(shaderData));
+        memcpy(uniformBuffers[currentBuffer].mapped, &shaderData, sizeof(shaderData));
         VK_CHECK_RESULT(vkResetFences(device, 1, &waitFences[currentFrame]));
 
         vkResetCommandBuffer(commandBuffers[currentBuffer], 0);
@@ -582,7 +603,7 @@ public:
         renderPassBeginInfo.renderArea.extent.height = height;
         renderPassBeginInfo.clearValueCount = 2;
         renderPassBeginInfo.pClearValues = clearValues;
-        renderPassBeginInfo.frameBuffer = frameBuffers[imageIndex];
+        renderPassBeginInfo.framebuffer = frameBuffers[imageIndex];
         VK_CHECK_RESULT(vkBeginCommandBuffer(commandBuffers[currentBuffer], &cmdBufIndo));
 
         vkCmdBeginRenderPass(commandBuffers[currentBuffer], &renderPassBeginInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -594,16 +615,44 @@ public:
         viewport.maxDepth = 1.0f;
         vkCmdSetViewport(commandBuffers[currentBuffer], 0, 1, &viewport);
 
-        VkRec2D scissor{};
+        VkRect2D scissor{};
         scissor.extent.width = width;
         scissor.extent.height = height;
         scissor.offset.x = 0;
         scissor.offset.y = 0;
+
+
         vkCmdSetScissor(commandBuffers[currentBuffer], 0, 1, &scissor);
-        vkCmdBindDescriptorSets(commandBuffers[currentBuffer], VK_PIPELINE_BIND_POINT_GRAPHICS, pippelineLayout, 0, 1, &uniformBuffers[currentBuffer].descriptorSet, 0, nullptr);
+        vkCmdBindDescriptorSets(commandBuffers[currentBuffer], VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &uniformBuffers[currentBuffer].descriptorSet, 0, nullptr);
         vkCmdBindPipeline(commandBuffers[currentBuffer], VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+        VkDeviceSize offsets[1]{ 0 };
+        vkCmdBindVertexBuffers(commandBuffers[currentBuffer], 0, 1, &vertices.buffer, offsets);
+        vkCmdBindIndexBuffer(commandBuffers[currentBuffer], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
+        
+        vkCmdDrawIndexed(commandBuffers[currentBuffer], indices.count, 1, 0, 0, 1);
+        vkCmdEndRenderPass(commandBuffers[currentBuffer]);
 
+        VK_CHECK_RESULT(vkEndCommandBuffer(commandBuffers[currentBuffer]));
 
+        VkPipelineStageFlags waitStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        submitInfo.pWaitDstStageMask = &waitStageMask;               // Pointer to the list of pipeline stages that the semaphore waits will occur at
+        submitInfo.waitSemaphoreCount = 1;                           // One wait semaphore
+        submitInfo.signalSemaphoreCount = 1;                         // One signal semaphore
+        submitInfo.pCommandBuffers = &commandBuffers[currentBuffer]; // Command buffers(s) to execute in this batch (submission)
+        submitInfo.commandBufferCount = 1;
+
+        submitInfo.pWaitSemaphores = &presentCompleteSemaphores[currentFrame];
+        submitInfo.pSignalSemaphores = &renderCompleteSemaphores[currentFrame];
+
+        VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentFrame]));
+
+        if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
+            windowResize();
+        }
+        else if (result != VK_SUCCESS) {
+            throw "Could not present the image to the swap chain!";
+        }
     
     }
 

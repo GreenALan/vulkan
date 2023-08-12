@@ -24,6 +24,7 @@ IF(WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
 ENDIF()
 
+
 # Gather list of header and source files for compilation
 file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
 file(GLOB HPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
@@ -31,6 +32,10 @@ file(GLOB HPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.h)
 MESSAGE(${CPP_FILES})
 
 add_subdirectory(base)
+
+#c++
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # Build project, give it a name and includes list of file to be compiled
 add_executable(${NAME} ${CPP_FILES} ${HPP_FILES})
