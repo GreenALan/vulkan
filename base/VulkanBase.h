@@ -18,6 +18,10 @@
 #include "VulkanSwapChain.h"
 #include "VulkanUIOverlay.h"
 #include "camera.hpp"
+#include "benchmark.hpp"
+#include "CommandLineParser.hpp"
+
+
 
 class VulkanBase
 {
@@ -68,6 +72,10 @@ public:
 	} depthStencil;
 
 	vks::VulkanDevice* vulkanDevice;
+	vks::UIOverlay UIOverlay;
+	CommandLineParser commandLineParser;
+
+	vks::Benchmark benchmark;
 
 	/** @brief Example settings that can be changed e.g. by command line arguments */
 	struct Settings {

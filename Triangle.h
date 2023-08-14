@@ -187,7 +187,7 @@ public:
 
         VkBufferCreateInfo vertexBufferInfoCI {};
         vertexBufferInfoCI.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        vertexBufferInfoCI.sType = vertexBufferSize;
+        vertexBufferInfoCI.size = vertexBufferSize;
         vertexBufferInfoCI.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT; 
         VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfoCI, nullptr, &stagingBuffers.vertices.buffer));
         vkGetBufferMemoryRequirements(device, stagingBuffers.vertices.buffer, &memReqs);
@@ -204,7 +204,7 @@ public:
         VK_CHECK_RESULT(vkCreateBuffer(device, &vertexBufferInfoCI, nullptr, &vertices.buffer));
         vkGetBufferMemoryRequirements(device, vertices.buffer, &memReqs);
         memAlloc.allocationSize = memReqs.size;
-        memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT)；
+        memAlloc.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
         VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &vertices.memory));
         VK_CHECK_RESULT(vkBindBufferMemory(device, vertices.buffer, vertices.memory, 0));
 
@@ -293,13 +293,13 @@ public:
         bufferInfo.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
 
         for (uint32_t i = 0; i < MAX_CONCURRENT_FRAMES; i++) {
-            VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &uniformBuffer[i].buffer));
+            VK_CHECK_RESULT(vkCreateBuffer(device, &bufferInfo, nullptr, &uniformBuffers[i].buffer));
             vkGetBufferMemoryRequirements(device, uniformBuffers[i].buffer, &memReqs);
             allocInfo.allocationSize = memReqs.size;
             allocInfo.memoryTypeIndex = getMemoryTypeIndex(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
-            VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &(uniformBuffer[i].memory)));
-            VK_CHECK_RESULT(vkBindBufferMemory(device, uniformBuffer[i].buffer, uniformBuffer[i].memory));
-            VK_CHECK_RESULT(vkMapMemory(device, uniformBuffer[i].memory, 0 , sizeof(ShaderData), 0, (void**)&UniformBuffers[i].mapped));
+            VK_CHECK_RESULT(vkAllocateMemory(device, &allocInfo, nullptr, &(uniformBuffers[i].memory)));
+            VK_CHECK_RESULT(vkBindBufferMemory(device, uniformBuffers[i].buffer, uniformBuffers[i].memory, 0));
+            VK_CHECK_RESULT(vkMapMemory(device, uniformBuffers[i].memory, 0 , sizeof(ShaderData), 0, (void**)&uniformBuffers[i].mapped));
 
         }
     }
@@ -557,7 +557,7 @@ public:
 
     }
 
-     virtual void render()
+    virtual void render()
     {
         if (!prepared)
         {
@@ -569,9 +569,9 @@ public:
         VkResult result = vkAcquireNextImageKHR(device, swapChain.swapChain, UINT64_MAX, presentCompleteSemaphores[currentFrame], VK_NULL_HANDLE, &imageIndex);
         if (result == VK_ERROR_OUT_OF_DATE_KHR)
         {
-           /* windowResize();*/
+            /* windowResize();*/
             return;
-        }  
+        }
         else if (result != VK_SUCCESS && (result != VK_SUBOPTIMAL_KHR)) {
             throw "Could not acquire the next swap chian image";
         }
@@ -590,8 +590,8 @@ public:
         cmdBufInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
         VkClearValue clearValues[2];
-        clearValues[0].color = {{0.0f, 0.0f, 0.2f, 1.0f}};
-        clearValues[1].depthStencil = {1.0f, 0};
+        clearValues[0].color = { {0.0f, 0.0f, 0.2f, 1.0f} };
+        clearValues[1].depthStencil = { 1.0f, 0 };
 
         VkRenderPassBeginInfo renderPassBeginInfo;
         renderPassBeginInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -628,7 +628,7 @@ public:
         VkDeviceSize offsets[1]{ 0 };
         vkCmdBindVertexBuffers(commandBuffers[currentBuffer], 0, 1, &vertices.buffer, offsets);
         vkCmdBindIndexBuffer(commandBuffers[currentBuffer], indices.buffer, 0, VK_INDEX_TYPE_UINT32);
-        
+
         vkCmdDrawIndexed(commandBuffers[currentBuffer], indices.count, 1, 0, 0, 1);
         vkCmdEndRenderPass(commandBuffers[currentBuffer]);
 
@@ -648,12 +648,12 @@ public:
         VK_CHECK_RESULT(vkQueueSubmit(queue, 1, &submitInfo, waitFences[currentFrame]));
 
         if ((result == VK_ERROR_OUT_OF_DATE_KHR) || (result == VK_SUBOPTIMAL_KHR)) {
-            windowResize();
+            //windowResize();
         }
         else if (result != VK_SUCCESS) {
             throw "Could not present the image to the swap chain!";
         }
-    
+
     }
 
-}
+};

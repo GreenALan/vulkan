@@ -6,6 +6,8 @@ project(${NAME})
 
 include_directories(${CMAKE_SOURCE_DIR}/includes)
 include_directories(external/glm)
+include_directories(external/imgui)
+
 
 # Use FindVulkan module added with CMAKE 3.7
 if (NOT CMAKE_VERSION VERSION_LESS 3.7.0)

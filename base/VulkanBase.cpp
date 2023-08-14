@@ -303,27 +303,27 @@ void VulkanBase::setupDepthStencil()
 {
 	VkImageCreateInfo imageCI{};
 	imageCI.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-	imageCI.imageType = VK_IMAGE_TYPE_2D；
+	imageCI.imageType = VK_IMAGE_TYPE_2D;
 	imageCI.format = depthFormat;
 	imageCI.extent ={width, height, 1};
 	imageCI.mipLevels = 1;
 	imageCI.arrayLayers = 1;
-	imageCI.sample = VK_SAMPLE_COUNT_1_BIT;
-	imageCI.tiling = VK_IMAGE_TILEING_OPTIMAL;
+	imageCI.samples = VK_SAMPLE_COUNT_1_BIT;
+	imageCI.tiling = VK_IMAGE_TILING_OPTIMAL;
 	imageCI.usage = VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
 
-	VK_CHECK_RESULT(vkCreateImage(device, &ImageCI, nullptr, &depthStencil.image));
-	VkMemoryRequirements2 memReqs{};
-	vkGetImageMemoryRequirements(device, depthStencil.image, &mmeReqs);
+	VK_CHECK_RESULT(vkCreateImage(device, &imageCI, nullptr, &depthStencil.image));
+	VkMemoryRequirements memReqs{};
+	vkGetImageMemoryRequirements(device, depthStencil.image, &memReqs);
 
-	VkMemoryAllcoateInfo memAlloc{};
+	VkMemoryAllocateInfo memAlloc{};
 	memAlloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_FLAGS_INFO;
 	memAlloc.allocationSize = memReqs.size;
 	memAlloc.memoryTypeIndex = vulkanDevice->getMemoryType(memReqs.memoryTypeBits, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
 	VK_CHECK_RESULT(vkAllocateMemory(device, &memAlloc, nullptr, &depthStencil.mem))
 	VK_CHECK_RESULT(vkBindImageMemory(device, depthStencil.image, depthStencil.mem, 0));
 	
-	ViewCreateInfo imageViewCI{};
+	VkImageViewCreateInfo imageViewCI{};
 	imageViewCI.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
 	imageViewCI.viewType = VK_IMAGE_VIEW_TYPE_2D;
 	imageViewCI.image = depthStencil.image;
@@ -342,7 +342,7 @@ void VulkanBase::setupDepthStencil()
 
 void VulkanBase::setupRenderPass()
 {
-	std::array<VkAttachmentDescription, 2> attachments = {};
+	std::vector<VkAttachmentDescription> attachments(2);
 	// Color attachment
 	attachments[0].format = swapChain.colorFormat;
 	attachments[0].samples = VK_SAMPLE_COUNT_1_BIT;
@@ -382,8 +382,7 @@ void VulkanBase::setupRenderPass()
 	subpassDescription.pResolveAttachments = nullptr;
 
 	// Subpass dependencies for layout transitions
-	std::array<VkSubpassDependency, 2> dependencies;
-
+	std::vector<VkSubpassDependency> dependencies(2);
 	dependencies[0].srcSubpass = VK_SUBPASS_EXTERNAL;
 	dependencies[0].dstSubpass = 0;
 	dependencies[0].srcStageMask = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
