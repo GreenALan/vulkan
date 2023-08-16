@@ -13,6 +13,8 @@
 #include <functional>
 #include <chrono>
 #include <iomanip>
+#include <numeric>
+
 
 namespace vks
 {

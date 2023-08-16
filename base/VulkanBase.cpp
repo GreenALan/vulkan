@@ -260,6 +260,17 @@ void VulkanBase::initSwapchain()
 #endif
 }
 
+std::string VulkanBase::getWindowTitle()
+{
+	std::string device(deviceProperties.deviceName);
+	std::string windowTitle;
+	windowTitle = title + " - " + device;
+	if (!settings.overlay) {
+		windowTitle += " - " + std::to_string(0) + " fps";
+	}
+	return windowTitle;
+}
+
 void VulkanBase::setupSwapChain()
 {
 	swapChain.create(&width, &height, settings.vsync, settings.fullscreen);
@@ -289,6 +300,10 @@ void VulkanBase::createCommandBuffers()
 
 }
 
+void VulkanBase::destroyCommandBuffers()
+{
+	vkFreeCommandBuffers(device, cmdPool, static_cast<uint32_t>(drawCmdBuffers.size()), drawCmdBuffers.data());
+}
 void VulkanBase::createSynchronizationPrimitives()
 {
 	// Wait fences to sync command buffer access

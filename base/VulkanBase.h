@@ -172,7 +172,6 @@ private:
 	void initSwapchain();
 	void setupSwapChain();
 
-	void setupSwapChain();
 	void createCommandPool();
 	void createSynchronizationPrimitives();
 	void createCommandBuffers();
