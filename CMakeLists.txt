@@ -7,6 +7,8 @@ project(${NAME})
 include_directories(${CMAKE_SOURCE_DIR}/includes)
 include_directories(external/glm)
 include_directories(external/imgui)
+include_directories(base)
+
 
 
 # Use FindVulkan module added with CMAKE 3.7
@@ -26,6 +28,11 @@ IF(WIN32)
 	set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DVK_USE_PLATFORM_WIN32_KHR")
 ENDIF()
 
+IF (NOT Vulkan_FOUND)
+	message(FATAL_ERROR "Could not find Vulkan library!")
+ELSE()
+	message(STATUS ${Vulkan_LIBRARY})
+ENDIF()
 
 # Gather list of header and source files for compilation
 file(GLOB CPP_FILES ${CMAKE_CURRENT_SOURCE_DIR}/*.cpp)
@@ -39,5 +46,8 @@ add_subdirectory(base)
 set(CMAKE_CXX_STANDARD 11)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+
+
 # Build project, give it a name and includes list of file to be compiled
 add_executable(${NAME} ${CPP_FILES} ${HPP_FILES})
+target_link_libraries(${NAME} base ${Vulkan_LIBRARY} ${WINLIBS})

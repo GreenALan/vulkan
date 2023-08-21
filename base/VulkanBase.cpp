@@ -1,5 +1,15 @@
 #include "VulkanBase.h"
 
+VulkanBase::VulkanBase(bool enableValidation)
+{
+	settings.validation = enableValidation;
+
+}
+VulkanBase::~VulkanBase()
+{
+
+}
+
 bool VulkanBase::initVulkan()
 {
 	VkResult err;
