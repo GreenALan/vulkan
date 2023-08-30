@@ -212,7 +212,9 @@ void VulkanSwapChain::create(uint32_t *width, uint32_t *height, bool vsync, bool
 
 	// Get physical device surface properties and formats
 	VkSurfaceCapabilitiesKHR surfCaps;
-	VK_CHECK_RESULT(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfCaps));
+
+	int ret = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &surfCaps);
+	// VK_CHECK_RESULT(0);
 
 	// Get available present modes
 	uint32_t presentModeCount;

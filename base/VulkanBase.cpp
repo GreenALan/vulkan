@@ -44,12 +44,35 @@ bool VulkanBase::initVulkan()
 		return false;
 	}
 
+uint32_t selectedDevice = 0;
+
+#if !defined(VK_USE_PLATFORM_ANDROID_KHR)
+	// GPU selection via command line argument
+	if (commandLineParser.isSet("gpuselection")) {
+		uint32_t index = commandLineParser.getValueAsInt("gpuselection", 0);
+		if (index > gpuCount - 1) {
+			std::cerr << "Selected device index " << index << " is out of range, reverting to device 0 (use -listgpus to show available Vulkan devices)" << "\n";
+		}
+		else {
+			selectedDevice = index;
+		}
+	}
+	if (commandLineParser.isSet("gpulist")) {
+		std::cout << "Available Vulkan devices" << "\n";
+		for (uint32_t i = 0; i < gpuCount; i++) {
+			VkPhysicalDeviceProperties deviceProperties;
+			vkGetPhysicalDeviceProperties(physicalDevices[i], &deviceProperties);
+			std::cout << "Device [" << i << "] : " << deviceProperties.deviceName << std::endl;
+			std::cout << " Type: " << vks::tools::physicalDeviceTypeString(deviceProperties.deviceType) << "\n";
+			std::cout << " API: " << (deviceProperties.apiVersion >> 22) << "." << ((deviceProperties.apiVersion >> 12) & 0x3ff) << "." << (deviceProperties.apiVersion & 0xfff) << "\n";
+		}
+	}
+#endif
 
 	// GPU selection
 
 	// Select physical device to be used for the Vulkan example
 	// Defaults to the first device unless specified by command line
-	uint32_t selectedDevice = 0;
 
 	physicalDevice = physicalDevices[selectedDevice];
 
@@ -478,6 +501,7 @@ void VulkanBase::getEnabledFeatures() {}
 
 VkResult VulkanBase::createInstance(bool enableValidation)
 {
+	enableValidation = true;
 	this->settings.validation = enableValidation;
 
 	// Validation can also be forced via a define

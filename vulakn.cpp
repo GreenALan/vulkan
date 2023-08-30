@@ -4,10 +4,22 @@
 #include <iostream>
 #include "Triangle.h"
 
+LRESULT CALLBACK WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+{
+	/*if (vulkanExample != NULL)
+	{
+		vulkanExample->handleMessages(hWnd, uMsg, wParam, lParam);
+	}*/
+	return (DefWindowProc(hWnd, uMsg, wParam, lParam));
+}
+
 int APIENTRY WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR pCmdLine, int nCmdShow)
 {
 	std::shared_ptr<VulkanExample> vulkanExample = std::make_shared<VulkanExample>();
+
 	vulkanExample->initVulkan();
+	vulkanExample->setupWindow(hInstance, WndProc);
+
 	vulkanExample->prepare();
 	while (true)
 	{
